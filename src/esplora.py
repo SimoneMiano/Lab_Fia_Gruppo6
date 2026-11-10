@@ -1,6 +1,7 @@
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
+plt.style.use("dark_background")
 
 # Cartella della prova da analizzare, relativa alla posizione di questo script
 DATA_FOLDER = Path(__file__).resolve().parent.parent / "Gruppo_3_stud_1_N"
@@ -53,11 +54,21 @@ def compute_features(file_path, signal_type):
 
     # Restituisce un dizionario con le medie dei canali, usando il prefisso appropriato.
     result = {}
+    
     for component, values in channels.items():
         # aggiunge una chiave al dizionario result, con il nome del canale e la statistica calcolata
         # la chiave è una stringa, creata tramite f-string, es. "accel_x_mean"
         # il valore è la statistica calcolata tramite numpy, es. np.mean(values)
         result[f"{prefix}_{component}_mean"] = float(np.mean(values))
+        
+        # varianza: quanto i valori si allontanano dalla media
+        result[f"{prefix}_{component}_var"] = float(np.var(values))
+        
+                # deviazione standard: radice della varianza, stessa unità del segnale
+        result[f"{prefix}_{component}_std"] = float(np.std(values))
+        
+                # interquartile range: Q3 - Q1, ampiezza della metà centrale dei valori (robusta ai picchi)
+        result[f"{prefix}_{component}_iqr"] = float(np.percentile(values, 75) - np.percentile(values, 25))
 
     return result
 
@@ -72,13 +83,36 @@ def plot_signal(file_path, signal_type):
     # finestra) anche gli altri si aggiornano.
     fig, axes = plt.subplots(4, 1, sharex=True, figsize=(12, 10))
     for ax, (label, signal), color in zip(
-        axes, channels.items(), ("tab:red", "tab:green", "tab:blue", "black")
+        axes, channels.items(), ("tab:red", "tab:green", "tab:blue", "white")
     ):
         ax.plot(seconds, signal, color=color, linewidth=0.8)
         ax.set_ylabel(f"{label} ({unit})")
         ax.grid(True, alpha=0.3)
     axes[-1].set_xlabel("tempo (s)")
     fig.suptitle(f"{signal_type} - {DATA_FOLDER.name}")
+    fig.tight_layout()
+    
+"""Visualizza le features di un segnale con un grafico a barre.
+Un riquadro per ogni statistica (mean, var, ...), perché hanno scale diverse."""
+def plot_features(features, signal_type):
+    # statistiche presenti, prese dalla fine del nome: "accel_x_var" -> "var"
+    stats = []
+    for name in features:
+        stat = name.split("_")[-1]
+        if stat not in stats:
+            stats.append(stat)
+
+    fig, axes = plt.subplots(len(stats), 1, figsize=(8, 3 * len(stats)), squeeze=False)
+    for ax, stat in zip(axes[:, 0], stats):
+        # features di questa statistica, es. accel_x_var, accel_y_var, ...
+        names = [name for name in features if name.endswith(f"_{stat}")]
+        # etichetta = nome del canale, es. "x", "magnitude"
+        labels = [name.split("_")[-2] for name in names]
+        ax.bar(labels, [features[n] for n in names])
+        ax.set_title(stat)
+        ax.grid(True, axis="y", alpha=0.3)
+
+    fig.suptitle(f"Features {signal_type} - {DATA_FOLDER.name}")
     fig.tight_layout()
 
 
@@ -94,6 +128,7 @@ if __name__ == "__main__":
 
         # prepara il grafico del segnale
         plot_signal(file_path, signal_type)
+        plot_features(feats, signal_type)
 
     # apre le finestre dei grafici (chiuderle con la X per terminare il programma)
     plt.show()
